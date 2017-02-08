@@ -39,6 +39,7 @@ public class TagCucumber extends Cucumber {
 
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(TagCucumber.class);
     private static Map<String, StepDefinition> stepDefinitionsByPattern;
+    public static CucumberFeature cucumberFeature;
 
     /**
      * Constructor called by JUnit.
@@ -59,38 +60,37 @@ public class TagCucumber extends Cucumber {
 
     @Override
     protected void runChild(FeatureRunner child, RunNotifier notifier) {
+        Map<String, StepDefinition> stepDefinitionsByPatternTranslated = new TreeMap<>();
 
         try {
             Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
             RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
+
+            cucumberFeature = (CucumberFeature) FieldUtils.readField(this, "cucumberFeature", true);
             stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue,
                     "stepDefinitionsByPattern", true);
 
-            Map<String, StepDefinition> stepDefinitionsByPatternTeranslated = new TreeMap<>();
-
             for (Map.Entry<String, StepDefinition> stepDefinitionEntry : stepDefinitionsByPattern.entrySet()) {
 
-                CucumberFeature cucumberFeature = (CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true);
-
+                CucumberFeature feature = (CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true);
                 StepDefinition stepDefinition = stepDefinitionEntry.getValue();
-
                 Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
                 String patternString = stepDefinitionEntry.getKey();
                 try {
-                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), cucumberFeature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
+                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), feature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
                     patternString = i18n.get(patternString);
                     Pattern pattern = Pattern.compile(patternString);
                     FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
                     FieldUtils.writeField(stepDefinition, "argumentMatcher", new JdkPatternArgumentMatcher(pattern), true);
-                    stepDefinitionsByPatternTeranslated.put(patternString, stepDefinition);
+                    stepDefinitionsByPatternTranslated.put(patternString, stepDefinition);
                 } catch (I18NRuntimeException e) {
                     LOG.debug("There is no bundle for translation class. Writing as is", e);
-                    stepDefinitionsByPatternTeranslated.put(patternString, stepDefinition);
+                    stepDefinitionsByPatternTranslated.put(patternString, stepDefinition);
                 }
 
             }
 
-            FieldUtils.writeField(glue, "stepDefinitionsByPattern", stepDefinitionsByPatternTeranslated, true);
+            FieldUtils.writeField(glue, "stepDefinitionsByPattern", stepDefinitionsByPatternTranslated, true);
             FieldUtils.writeField(runtime, "glue", glue, true);
             FieldUtils.writeField(this, "runtime", runtime, true);
 
