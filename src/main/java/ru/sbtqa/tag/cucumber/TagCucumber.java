@@ -1,27 +1,23 @@
 package ru.sbtqa.tag.cucumber;
 
+import cucumber.api.CucumberOptions;
 import cucumber.api.junit.Cucumber;
-import cucumber.runtime.CucumberException;
-import cucumber.runtime.JdkPatternArgumentMatcher;
+import cucumber.runtime.*;
 import cucumber.runtime.Runtime;
-import cucumber.runtime.RuntimeGlue;
-import cucumber.runtime.StepDefinition;
 import cucumber.runtime.junit.FeatureRunner;
 import cucumber.runtime.model.CucumberFeature;
 import org.apache.commons.lang3.reflect.FieldUtils;
+import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.model.InitializationError;
+import org.slf4j.LoggerFactory;
+import ru.sbtqa.tag.qautils.i18n.I18N;
+import ru.sbtqa.tag.qautils.i18n.I18NRuntimeException;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
-import org.junit.runner.notification.RunNotifier;
-import org.slf4j.LoggerFactory;
-import ru.sbtqa.tag.qautils.i18n.I18N;
-import ru.sbtqa.tag.qautils.i18n.I18NRuntimeException;
-import ru.sbtqa.tag.qautils.properties.Props;
-import ru.sbtqa.tag.qautils.properties.PropsRuntimeException;
 
 /**
  * <p>
@@ -79,16 +75,9 @@ public class TagCucumber extends Cucumber {
                 StepDefinition stepDefinition = stepDefinitionEntry.getValue();
 
                 Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
-                String bundlePath = I18N.DEFAULT_BUNDLE_PATH;
-                try {
-                    bundlePath = Props.get("i18n.path", I18N.DEFAULT_BUNDLE_PATH);
-                } catch (PropsRuntimeException e) {
-                    LOG.debug("Properties file does not exist failing back to default bundle path \"{}\"", I18N.DEFAULT_BUNDLE_PATH, e);
-                }
-
                 String patternString = stepDefinitionEntry.getKey();
                 try {
-                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), cucumberFeature.getI18n().getLocale(), bundlePath);
+                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), cucumberFeature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
                     patternString = i18n.get(patternString);
                     Pattern pattern = Pattern.compile(patternString);
                     FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
