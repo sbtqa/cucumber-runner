@@ -38,8 +38,9 @@ import java.util.regex.Pattern;
 public class TagCucumber extends Cucumber {
 
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(TagCucumber.class);
-    private static Map<String, StepDefinition> stepDefinitionsByPattern;
-    public static CucumberFeature cucumberFeature;
+    private static final ThreadLocal<CucumberFeature> cucumberFeature = new ThreadLocal<>();
+    private Map<String, StepDefinition> stepDefinitionsByPattern;
+
 
     /**
      * Constructor called by JUnit.
@@ -59,6 +60,14 @@ public class TagCucumber extends Cucumber {
                 "stepDefinitionsByPattern", true);
     }
 
+    /**
+     * Returns current running feature. It is thread safe static method
+     * @return {@link CucumberFeature} current running feature
+     */
+    public static CucumberFeature getFeature() {
+        return cucumberFeature.get();
+    }
+
     @Override
     protected void runChild(FeatureRunner child, RunNotifier notifier) {
         Map<String, StepDefinition> stepDefinitionsByPatternTranslated = new TreeMap<>();
@@ -67,7 +76,7 @@ public class TagCucumber extends Cucumber {
             Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
             RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
 
-            cucumberFeature = (CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true);
+            cucumberFeature.set((CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true));
             stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue,
                     "stepDefinitionsByPattern", true);
 
@@ -77,7 +86,7 @@ public class TagCucumber extends Cucumber {
                 Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
                 String patternString = stepDefinitionEntry.getKey();
                 try {
-                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), cucumberFeature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
+                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), getFeature().getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
                     patternString = i18n.get(patternString);
                     Pattern pattern = Pattern.compile(patternString);
                     FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
