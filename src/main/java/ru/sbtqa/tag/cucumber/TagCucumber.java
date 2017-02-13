@@ -48,6 +48,7 @@ public class TagCucumber extends Cucumber {
      * @throws java.io.IOException if there is a problem
      * @throws org.junit.runners.model.InitializationError if there is another
      * problem
+     * @throws java.lang.IllegalAccessException if any reflection error
      */
     public TagCucumber(Class clazz) throws InitializationError, IOException, IllegalAccessException {
         super(clazz);
@@ -66,18 +67,17 @@ public class TagCucumber extends Cucumber {
             Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
             RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
 
-            cucumberFeature = (CucumberFeature) FieldUtils.readField(this, "cucumberFeature", true);
+            cucumberFeature = (CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true);
             stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue,
                     "stepDefinitionsByPattern", true);
 
             for (Map.Entry<String, StepDefinition> stepDefinitionEntry : stepDefinitionsByPattern.entrySet()) {
 
-                CucumberFeature feature = (CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true);
                 StepDefinition stepDefinition = stepDefinitionEntry.getValue();
                 Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
                 String patternString = stepDefinitionEntry.getKey();
                 try {
-                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), feature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
+                    I18N i18n = I18N.getI18n(method.getDeclaringClass(), cucumberFeature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
                     patternString = i18n.get(patternString);
                     Pattern pattern = Pattern.compile(patternString);
                     FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
