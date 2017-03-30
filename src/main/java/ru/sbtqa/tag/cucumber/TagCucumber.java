@@ -2,10 +2,15 @@ package ru.sbtqa.tag.cucumber;
 
 import cucumber.api.CucumberOptions;
 import cucumber.api.junit.Cucumber;
-import cucumber.runtime.*;
+import cucumber.runtime.CucumberException;
+import cucumber.runtime.JdkPatternArgumentMatcher;
 import cucumber.runtime.Runtime;
+import cucumber.runtime.RuntimeGlue;
+import cucumber.runtime.StepDefinition;
 import cucumber.runtime.junit.FeatureRunner;
 import cucumber.runtime.model.CucumberFeature;
+import cucumber.runtime.model.StepContainer;
+import gherkin.formatter.model.Step;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.model.InitializationError;
@@ -15,7 +20,11 @@ import ru.sbtqa.tag.qautils.i18n.I18NRuntimeException;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
@@ -50,6 +59,7 @@ public class TagCucumber extends Cucumber {
      * problem
      * @throws java.lang.IllegalAccessException if any reflection error
      */
+    @SuppressWarnings("unchecked")
     public TagCucumber(Class clazz) throws InitializationError, IOException, IllegalAccessException {
         super(clazz);
 
@@ -60,6 +70,7 @@ public class TagCucumber extends Cucumber {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     protected void runChild(FeatureRunner child, RunNotifier notifier) {
         Map<String, StepDefinition> stepDefinitionsByPatternTranslated = new TreeMap<>();
 
@@ -71,14 +82,41 @@ public class TagCucumber extends Cucumber {
             stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue,
                     "stepDefinitionsByPattern", true);
 
-            for (Map.Entry<String, StepDefinition> stepDefinitionEntry : stepDefinitionsByPattern.entrySet()) {
+            StepContainer currentStepContainer = (StepContainer) FieldUtils.readField(cucumberFeature, "currentStepContainer", true);
+            List<Step> steps = currentStepContainer.getSteps();
+            int currentStepIndex = 0;
+            String lastStepContext = "";
 
+            Queue<StepDefinition> q = new LinkedList<>();
+
+
+            for (Map.Entry<String, StepDefinition> stepDefinitionEntry : stepDefinitionsByPattern.entrySet()) {
+                // TODO: Выцеплять из дефинишена в каком он пакете и по этому признаку проставлять префикс
                 StepDefinition stepDefinition = stepDefinitionEntry.getValue();
                 Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
                 String patternString = stepDefinitionEntry.getKey();
                 try {
                     I18N i18n = I18N.getI18n(method.getDeclaringClass(), cucumberFeature.getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
                     patternString = i18n.get(patternString);
+                    if (stepDefinitionEntry.getKey().startsWith("ru.sbtqa.tag.")) {
+                        for (int i = currentStepIndex; i < steps.size(); i++) {
+
+                            Step step = steps.get(i);
+                            Pattern p = Pattern.compile(patternString);
+                            if (!step.getName().startsWith("ru.sbtqa.tag.") && p.matcher(step.getName()).matches()) {
+                                currentStepIndex++;
+                                lastStepContext = stepDefinitionEntry.getKey();
+                                steps.set(i, step);
+                                FieldUtils.writeField(step, "name", lastStepContext + step.getName(), true);
+                            }
+                        }
+                        FieldUtils.writeField(currentStepContainer, "steps", steps, true);
+                        FieldUtils.writeField(cucumberFeature, "currentStepContainer", currentStepContainer, true);
+                        patternString = patternString.startsWith("^") ? "^" + lastStepContext + patternString.substring(1) : lastStepContext + patternString;
+
+                    } else {
+                        lastStepContext = "";
+                    }
                     Pattern pattern = Pattern.compile(patternString);
                     FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
                     FieldUtils.writeField(stepDefinition, "argumentMatcher", new JdkPatternArgumentMatcher(pattern), true);
@@ -90,6 +128,9 @@ public class TagCucumber extends Cucumber {
 
             }
 
+//            q.addAll(stepDefinitionsByPatternTranslated.values());
+
+            FieldUtils.writeField(child, "cucumberFeature", cucumberFeature, true);
             FieldUtils.writeField(glue, "stepDefinitionsByPattern", stepDefinitionsByPatternTranslated, true);
             FieldUtils.writeField(runtime, "glue", glue, true);
             FieldUtils.writeField(this, "runtime", runtime, true);
@@ -99,4 +140,17 @@ public class TagCucumber extends Cucumber {
             throw new CucumberException(ex);
         }
     }
+
+
+    private List<StepDefinition> findUniques(Queue<StepDefinition> q) {
+        List<StepDefinition> uniques = new ArrayList<>();
+        while (q.peek() != null) {
+            StepDefinition stepDefinition = q.remove();
+            if (!q.contains(stepDefinition)) {
+                uniques.add(stepDefinition);
+            }
+        }
+        return uniques;
+    }
+
 }
