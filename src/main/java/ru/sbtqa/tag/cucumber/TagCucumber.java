@@ -47,6 +47,7 @@ import java.util.regex.Pattern;
 public class TagCucumber extends Cucumber {
 
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(TagCucumber.class);
+    static final String SECRET_DELIMITER = ":::==!!SECRET!!==:::";
     private static Map<String, StepDefinition> stepDefinitionsByPattern;
     public static CucumberFeature cucumberFeature;
 
@@ -62,11 +63,18 @@ public class TagCucumber extends Cucumber {
     @SuppressWarnings("unchecked")
     public TagCucumber(Class clazz) throws InitializationError, IOException, IllegalAccessException {
         super(clazz);
+//
+//        Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
+//
+//        RuntimeOptions options = (RuntimeOptions) FieldUtils.readField(runtime, "runtimeOptions", true);
+//        List pluginFormatterNames = (List) FieldUtils.readField(options, "pluginFormatterNames", true);
+//
+//        pluginFormatterNames.remove("ru.yandex.qatools.allure.cucumberjvm.AllureReporter");
+//        options.addPlugin(new TagAllureReporter());
+//
+//        FieldUtils.writeField(options, "pluginFormatterNames", pluginFormatterNames, true);
+//        FieldUtils.writeField(runtime, "runtimeOptions", options, true);
 
-        Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
-        RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
-        stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue,
-                "stepDefinitionsByPattern", true);
     }
 
     @Override
@@ -107,12 +115,14 @@ public class TagCucumber extends Cucumber {
                                 currentStepIndex++;
                                 lastStepContext = stepDefinitionEntry.getKey();
                                 steps.set(i, step);
-                                FieldUtils.writeField(step, "name", lastStepContext + step.getName(), true);
+                                FieldUtils.writeField(step, "name", lastStepContext + SECRET_DELIMITER + step.getName(), true);
                             }
                         }
                         FieldUtils.writeField(currentStepContainer, "steps", steps, true);
                         FieldUtils.writeField(cucumberFeature, "currentStepContainer", currentStepContainer, true);
-                        patternString = patternString.startsWith("^") ? "^" + lastStepContext + patternString.substring(1) : lastStepContext + patternString;
+                        patternString = patternString.startsWith("^")
+                                ? "^" + lastStepContext + SECRET_DELIMITER + patternString.substring(1)
+                                : lastStepContext + SECRET_DELIMITER + patternString;
 
                     } else {
                         lastStepContext = "";
@@ -151,6 +161,10 @@ public class TagCucumber extends Cucumber {
             }
         }
         return uniques;
+    }
+
+    public static CucumberFeature getFeature() {
+        return cucumberFeature;
     }
 
 }
