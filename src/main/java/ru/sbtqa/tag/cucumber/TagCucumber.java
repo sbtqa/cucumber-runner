@@ -100,37 +100,14 @@ public class TagCucumber extends Cucumber {
                     String context;
                     if (canonicalName.contains("ru.sbtqa.tag.")) {
                         context = canonicalName.substring("ru.sbtqa.tag.".length(), canonicalName.indexOf('.', "ru.sbtqa.tag.".length()));
-                        stepDefinitionsByPatternTranslated.put("^" + context + SECRET_DELIMITER + (patternString.startsWith("^") ? patternString.substring(1) : patternString), stepDefinition);
-                        Pattern pattern = Pattern.compile(patternString);
+                        
+                        String translatedPattern = "^" + context + SECRET_DELIMITER + (patternString.startsWith("^") ? patternString.substring(1) : patternString);
+                        
+                        stepDefinitionsByPatternTranslated.put(translatedPattern, stepDefinition);
+                        Pattern pattern = Pattern.compile(translatedPattern);
                         FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
                         FieldUtils.writeField(stepDefinition, "argumentMatcher", new JdkPatternArgumentMatcher(pattern), true);
                     }
-                    //                    if (stepDefinitionEntry.getKey().startsWith("ru.sbtqa.tag.")) {
-                    //                        for (int i = currentStepIndex; i < steps.size(); i++) {
-                    //
-                    //                            Step step = steps.get(i);
-                    //                            Pattern p = Pattern.compile(patternString);
-                    //                            if (!step.getName().startsWith("ru.sbtqa.tag.") && p.matcher(step.getName()).matches()) {
-                    //                                currentStepIndex++;
-                    //                                lastStepContext = stepDefinitionEntry.getKey();
-                    //                                steps.set(i, step);
-                    //                                FieldUtils.writeField(step, "name", lastStepContext + SECRET_DELIMITER + step.getName(), true);
-                    //                            }
-                    //                        }
-                    //                        FieldUtils.writeField(currentStepContainer, "steps", steps, true);
-                    //                        FieldUtils.writeField(cucumberFeature, "currentStepContainer", currentStepContainer, true);
-                    //                        patternString = patternString.startsWith("^")
-                    //                                ? "^" + lastStepContext + SECRET_DELIMITER + patternString.substring(1)
-                    //                                : lastStepContext + SECRET_DELIMITER + patternString;
-                    //
-                    //                    } else {
-                    //                        lastStepContext = "";
-                    //                    }
-                    //                    Pattern pattern = Pattern.compile(patternString);
-                    //                    FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
-                    //                    FieldUtils.writeField(stepDefinition, "argumentMatcher", new JdkPatternArgumentMatcher(pattern), true);
-                    //                    stepDefinitionsByPatternTranslated.put(patternString, stepDefinition);
-                    
                 } catch (I18NRuntimeException e) {
                     LOG.debug("There is no bundle for translation class. Writing as is", e);
                     stepDefinitionsByPatternTranslated.put(patternString, stepDefinition);
@@ -144,11 +121,10 @@ public class TagCucumber extends Cucumber {
                 matchedStepDefsPatterns.clear();
                 step = steps.get(i);
                 
-                // Сколько степов водходит
+                // Сколько регулярок удовлетворяет степу
+                String stepName = step.getName();
                 for (Map.Entry<String, StepDefinition> stringStepDefinitionEntry : stepDefinitionsByPatternTranslated.entrySet()) {
-                    if (Pattern.compile(stringStepDefinitionEntry.getValue().getPattern())
-                               .matcher(step.getName())
-                               .matches()) {
+                    if (Pattern.compile(getPattern(stringStepDefinitionEntry.getValue().getPattern())).matcher(stepName).matches()) {
                         matchedStepDefsPatterns.add(stringStepDefinitionEntry.getKey());
                     }
                 }
@@ -157,13 +133,11 @@ public class TagCucumber extends Cucumber {
                     throw new RuntimeException();
                 }
                 
-                
                 if (matchedStepDefsPatterns.size() == 1) {
                     // Если с секретом, значит это шаг из библиотек наших
                     // если нет, обычный шаг, не трогаем его
                     if (matchedStepDefsPatterns.get(0).contains(SECRET_DELIMITER)) {
-                        FieldUtils.writeField(step, "name", getContext(matchedStepDefsPatterns.get(0)) + SECRET_DELIMITER + step
-                                .getName(), true);
+                        FieldUtils.writeField(step, "name", getContext(matchedStepDefsPatterns.get(0)) + SECRET_DELIMITER + stepName, true);
                     }
                 } else {
                     // Здесь конфликты могут возникунуть только м\у нашими либами. Контекст задан. Иначе некорректно.
@@ -171,19 +145,10 @@ public class TagCucumber extends Cucumber {
                     String context = getContext(steps.get(i - 1).getName());
                     for (String matchedStepDefsPattern : matchedStepDefsPatterns) {
                         if (matchedStepDefsPattern.contains(context)) {
-                            FieldUtils.writeField(step, "name", context + SECRET_DELIMITER + step.getName(), true);
+                            FieldUtils.writeField(step, "name", context + SECRET_DELIMITER + stepName, true);
                         }
                     }
                 }
-            }
-            
-            // Записать новые регулярки для степов с секретом
-            for (Map.Entry<String, StepDefinition> stringStepDefinitionEntry : stepDefinitionsByPatternTranslated.entrySet()) {
-                String key = stringStepDefinitionEntry.getKey();
-                        FieldUtils.writeField(stringStepDefinitionEntry.getValue(), "pattern", Pattern
-                        .compile(key), true);
-                FieldUtils.writeField(stringStepDefinitionEntry.getValue(), "argumentMatcher", new JdkPatternArgumentMatcher(Pattern
-                        .compile(key)), true);
             }
             
             FieldUtils.writeField(currentStepContainer, "steps", steps, true);
@@ -207,6 +172,14 @@ public class TagCucumber extends Cucumber {
         } else {
             return split[0];
         }
+    }
+    
+    private String getPattern(String reg) {
+        String[] split = reg.split(SECRET_DELIMITER);
+        if (split.length == 1) {
+            return reg;
+        }
+        return "^" + split[1];
     }
     
     
