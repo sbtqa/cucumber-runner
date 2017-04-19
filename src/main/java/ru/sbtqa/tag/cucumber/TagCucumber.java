@@ -147,8 +147,8 @@ public class TagCucumber extends Cucumber {
                             FieldUtils.writeField(step, "name", context + SECRET_DELIMITER + stepName, true);
                         }
                     }
-                    // Если нашли несколько степдефоф удовлетворяющих данному шагу и среди них нет тсепдефа с контекстом из
-                    // предыдущего шага, значит некорректная ситуация - runtime exception
+                    // In case several stepdefs found waht conforms given patters, and there is no stepdef
+                    // with needed context? RuntimeException should be thrown
                     if (!isMatched) {
                         throw new RuntimeException(String.format("There isn't step %s in context %s", step.getName(), context));
                     }
