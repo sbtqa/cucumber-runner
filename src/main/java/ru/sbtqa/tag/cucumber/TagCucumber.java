@@ -48,7 +48,7 @@ public class TagCucumber extends Cucumber {
     private static final String PLUGIN_PACKAGE = "ru.sbtqa.tag.";
     private static final String STRING_START_REGEX = "^";
 
-    static final String SECRET_DELIMITER = ":::==!!SECRET!!==:::";
+    static final String SECRET_DELIMITER = "°\u0000\u0000\u0000 ";
 
     public static CucumberFeature cucumberFeature;
 
