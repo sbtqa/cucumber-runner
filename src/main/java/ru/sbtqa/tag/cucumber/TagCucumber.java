@@ -130,7 +130,7 @@ public class TagCucumber extends Cucumber {
                 }
                 
                 if (matchedStepDefsPatterns.isEmpty()) {
-                    throw new RuntimeException();
+                    throw new RuntimeException(String.format("There isn't step definition matched to step %s", step.getName()));
                 }
                 
                 if (matchedStepDefsPatterns.size() == 1) {
@@ -143,10 +143,17 @@ public class TagCucumber extends Cucumber {
                     // Здесь конфликты могут возникунуть только м\у нашими либами. Контекст задан. Иначе некорректно.
                     // Берем контекст из предыдущего шага
                     String context = getContext(steps.get(i - 1).getName());
+                    boolean isMatched = false;
                     for (String matchedStepDefsPattern : matchedStepDefsPatterns) {
                         if (matchedStepDefsPattern.contains(context)) {
+                            isMatched = true;
                             FieldUtils.writeField(step, "name", context + SECRET_DELIMITER + stepName, true);
                         }
+                    }
+                    // Если нашли несколько степдефоф удовлетворяющих данному шагу и среди них нет тсепдефа с контекстом из
+                    // предыдущего шага, значит некорректная ситуация - runtime exception
+                    if (!isMatched) {
+                        throw new RuntimeException(String.format("There isn't step %s in context %s", step.getName(), context));
                     }
                 }
             }
