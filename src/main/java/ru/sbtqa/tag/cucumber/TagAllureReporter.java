@@ -509,8 +509,8 @@ public class TagAllureReporter implements Reporter, Formatter {
 
     private String getStepName(Step step) {
         return step.getName().split(TagCucumber.SECRET_DELIMITER).length > 1
-                ? step.getName().split(TagCucumber.SECRET_DELIMITER)[1]
-                : step.getName();
+                ? step.getKeyword() + step.getName().split(TagCucumber.SECRET_DELIMITER)[1]
+                : step.getKeyword() + step.getName();
 
     }
 }
