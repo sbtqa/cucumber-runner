@@ -11,6 +11,7 @@ import cucumber.runtime.junit.FeatureRunner;
 import cucumber.runtime.model.CucumberFeature;
 import cucumber.runtime.model.StepContainer;
 import gherkin.formatter.model.Step;
+
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
+
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.model.InitializationError;
@@ -50,20 +52,22 @@ public class TagCucumber extends Cucumber {
 
     public static final String SECRET_DELIMITER = "°\u0000\u0000\u0000 ";
 
-    private static ThreadLocal<CucumberFeature> cucumberFeature;
+    private static final ThreadLocal<CucumberFeature> CUCUMBER_FEATURE = new ThreadLocal<>();
+    private static final ThreadLocal<CurrentClass> CURRENT_CLASS = new ThreadLocal<>();
 
     /**
      * Constructor called by JUnit.
      *
      * @param clazz the class with the @RunWith annotation.
-     * @throws java.io.IOException if there is a problem
+     * @throws java.io.IOException                         if there is a problem
      * @throws org.junit.runners.model.InitializationError if there is another problem
-     * @throws java.lang.IllegalAccessException if any reflection error
+     * @throws java.lang.IllegalAccessException            if any reflection error
      */
     @SuppressWarnings("unchecked")
     public TagCucumber(Class clazz) throws InitializationError, IOException, IllegalAccessException {
         super(clazz);
-        cucumberFeature.remove();
+        CURRENT_CLASS.set(new CurrentClass(this.getTestClass()));
+
     }
 
     @Override
@@ -75,41 +79,46 @@ public class TagCucumber extends Cucumber {
             Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
             RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
 
-            cucumberFeature.set((CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true));
+            CUCUMBER_FEATURE.set((CucumberFeature) FieldUtils.readField(child, "CUCUMBER_FEATURE", true));
             Map<String, StepDefinition> stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue, "stepDefinitionsByPattern", true);
 
-            StepContainer currentStepContainer = (StepContainer) FieldUtils.readField(cucumberFeature.get(), "currentStepContainer", true);
+            StepContainer currentStepContainer = (StepContainer) FieldUtils.readField(CUCUMBER_FEATURE.get(), "currentStepContainer", true);
             List<Step> steps = currentStepContainer.getSteps();
 
 
-            // Проставляем префикс в зависимости от пакета с секретом
-            for (Map.Entry<String, StepDefinition> stepDefinitionEntry : stepDefinitionsByPattern.entrySet()) {
+            if (CURRENT_CLASS.get().isTranslated(this.getTestClass())) {
+                stepDefinitionsByPatternTranslated = stepDefinitionsByPattern;
+            } else {
+                // Проставляем префикс в зависимости от пакета с секретом
+                for (Map.Entry<String, StepDefinition> stepDefinitionEntry : stepDefinitionsByPattern.entrySet()) {
 
-                StepDefinition stepDefinition = stepDefinitionEntry.getValue();
-                Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
-                String patternString = stepDefinitionEntry.getKey();
+                    StepDefinition stepDefinition = stepDefinitionEntry.getValue();
+                    Method method = (Method) FieldUtils.readField(stepDefinition, "method", true);
+                    String patternString = stepDefinitionEntry.getKey();
 
-                try {
-                    Class<?> declaringClass = method.getDeclaringClass();
-                    I18N i18n = I18N.getI18n(declaringClass, cucumberFeature.get().getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
-                    patternString = i18n.get(patternString);
-                    String canonicalName = declaringClass.getCanonicalName();
-                    String context;
-                    if (canonicalName.contains(PLUGIN_PACKAGE)) {
-                        context = canonicalName.substring(PLUGIN_PACKAGE.length(), canonicalName.indexOf('.', "ru.sbtqa.tag.".length()));
+                    try {
+                        Class<?> declaringClass = method.getDeclaringClass();
+                        I18N i18n = I18N.getI18n(declaringClass, CUCUMBER_FEATURE.get().getI18n().getLocale(), I18N.DEFAULT_BUNDLE_PATH);
+                        patternString = i18n.get(patternString);
+                        String canonicalName = declaringClass.getCanonicalName();
+                        String context;
+                        if (canonicalName.contains(PLUGIN_PACKAGE)) {
+                            context = canonicalName.substring(PLUGIN_PACKAGE.length(), canonicalName.indexOf('.', "ru.sbtqa.tag.".length()));
 
-                        String translatedPattern = STRING_START_REGEX + context + SECRET_DELIMITER +
-                                (patternString.startsWith(STRING_START_REGEX) ? patternString.substring(1) : patternString);
+                            String translatedPattern = STRING_START_REGEX + context + SECRET_DELIMITER +
+                                    (patternString.startsWith(STRING_START_REGEX) ? patternString.substring(1) : patternString);
 
-                        stepDefinitionsByPatternTranslated.put(translatedPattern, stepDefinition);
-                        Pattern pattern = Pattern.compile(translatedPattern);
-                        FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
-                        FieldUtils.writeField(stepDefinition, "argumentMatcher", new JdkPatternArgumentMatcher(pattern), true);
+                            stepDefinitionsByPatternTranslated.put(translatedPattern, stepDefinition);
+                            Pattern pattern = Pattern.compile(translatedPattern);
+                            FieldUtils.writeField(stepDefinition, "pattern", pattern, true);
+                            FieldUtils.writeField(stepDefinition, "argumentMatcher", new JdkPatternArgumentMatcher(pattern), true);
+                        }
+                    } catch (I18NRuntimeException e) {
+                        LOG.debug("There is no bundle for translation class. Writing it as is.", e);
+                        stepDefinitionsByPatternTranslated.put(patternString, stepDefinition);
                     }
-                } catch (I18NRuntimeException e) {
-                    LOG.debug("There is no bundle for translation class. Writing it as is.", e);
-                    stepDefinitionsByPatternTranslated.put(patternString, stepDefinition);
                 }
+                CURRENT_CLASS.set(new CurrentClass(this.getTestClass()).markTranslated());
             }
 
             // Processing steps
@@ -157,8 +166,8 @@ public class TagCucumber extends Cucumber {
             }
 
             FieldUtils.writeField(currentStepContainer, "steps", steps, true);
-            FieldUtils.writeField(cucumberFeature.get(), "currentStepContainer", currentStepContainer, true);
-            FieldUtils.writeField(child, "cucumberFeature", cucumberFeature.get(), true);
+            FieldUtils.writeField(CUCUMBER_FEATURE.get(), "currentStepContainer", currentStepContainer, true);
+            FieldUtils.writeField(child, "CUCUMBER_FEATURE", CUCUMBER_FEATURE.get(), true);
             FieldUtils.writeField(glue, "stepDefinitionsByPattern", stepDefinitionsByPatternTranslated, true);
             FieldUtils.writeField(runtime, "glue", glue, true);
             FieldUtils.writeField(this, "runtime", runtime, true);
@@ -193,7 +202,7 @@ public class TagCucumber extends Cucumber {
     }
 
     public static CucumberFeature getFeature() {
-        return cucumberFeature.get();
+        return CUCUMBER_FEATURE.get();
     }
 
 }
