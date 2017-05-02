@@ -7,8 +7,10 @@ import cucumber.runtime.JdkPatternArgumentMatcher;
 import cucumber.runtime.Runtime;
 import cucumber.runtime.RuntimeGlue;
 import cucumber.runtime.StepDefinition;
+import cucumber.runtime.junit.ExecutionUnitRunner;
 import cucumber.runtime.junit.FeatureRunner;
 import cucumber.runtime.model.CucumberFeature;
+import cucumber.runtime.model.CucumberScenario;
 import cucumber.runtime.model.StepContainer;
 import gherkin.formatter.model.Step;
 
@@ -59,9 +61,9 @@ public class TagCucumber extends Cucumber {
      * Constructor called by JUnit.
      *
      * @param clazz the class with the @RunWith annotation.
-     * @throws java.io.IOException                         if there is a problem
+     * @throws java.io.IOException if there is a problem
      * @throws org.junit.runners.model.InitializationError if there is another problem
-     * @throws java.lang.IllegalAccessException            if any reflection error
+     * @throws java.lang.IllegalAccessException if any reflection error
      */
     @SuppressWarnings("unchecked")
     public TagCucumber(Class clazz) throws InitializationError, IOException, IllegalAccessException {
@@ -79,7 +81,8 @@ public class TagCucumber extends Cucumber {
             Runtime runtime = (Runtime) FieldUtils.readField(this, "runtime", true);
             RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
 
-            CUCUMBER_FEATURE.set((CucumberFeature) FieldUtils.readField(child, "CUCUMBER_FEATURE", true));
+            CUCUMBER_FEATURE.set((CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true));
+            List<ExecutionUnitRunner> children = ((ArrayList<ExecutionUnitRunner>) FieldUtils.readField(child, "children", true));
             Map<String, StepDefinition> stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue, "stepDefinitionsByPattern", true);
 
             StepContainer currentStepContainer = (StepContainer) FieldUtils.readField(CUCUMBER_FEATURE.get(), "currentStepContainer", true);
@@ -121,53 +124,26 @@ public class TagCucumber extends Cucumber {
                 CURRENT_CLASS.set(new CurrentClass(this.getTestClass()).markTranslated());
             }
 
-            // Processing steps
-            List<String> matchedStepDefsPatterns = new ArrayList<>();
-            Step step;
-            for (int i = 0; i < steps.size(); i++) {
-                matchedStepDefsPatterns.clear();
-                step = steps.get(i);
+            List<ExecutionUnitRunner> newChildren = new ArrayList<>();
+            for (ExecutionUnitRunner childRunner : children) {
+                FieldUtils.writeField(childRunner, "runnerSteps",
+                        this.processSteps(childRunner.getRunnerSteps(), stepDefinitionsByPatternTranslated), true);
 
-                // Determine how many regexes conforms step's pattern
-                String stepName = step.getName();
-                for (Map.Entry<String, StepDefinition> stringStepDefinitionEntry : stepDefinitionsByPatternTranslated.entrySet()) {
-                    if (Pattern.compile(getPattern(stringStepDefinitionEntry.getValue().getPattern())).matcher(stepName).matches()) {
-                        matchedStepDefsPatterns.add(stringStepDefinitionEntry.getKey());
-                    }
-                }
+                CucumberScenario cucumberScenario = (CucumberScenario) FieldUtils.readField(childRunner, "cucumberScenario", true);
+                FieldUtils.writeField(cucumberScenario, "steps",
+                        this.processSteps(cucumberScenario.getSteps(), stepDefinitionsByPatternTranslated), true);
+                FieldUtils.writeField(childRunner, "cucumberScenario", cucumberScenario, true);
 
-                if (matchedStepDefsPatterns.isEmpty()) {
-                    throw new RuntimeException(String.format("There isn't step definition matched to step %s", step.getName()));
-                }
 
-                if (matchedStepDefsPatterns.size() == 1) {
-                    // If it contains SECRET_DELIMITER so it TAG's plugin step, else it from end project
-                    if (matchedStepDefsPatterns.get(0).contains(SECRET_DELIMITER)) {
-                        FieldUtils.writeField(step, "name", getContext(matchedStepDefsPatterns.get(0)) +
-                                SECRET_DELIMITER + stepName, true);
-                    }
-                } else {
-                    // Any conflicts should be fixed in TAG plugins, we should avoid it
-                    // Getting context from previous step
-                    String context = getContext(steps.get(i - 1).getName());
-                    boolean isMatched = false;
-                    for (String matchedStepDefsPattern : matchedStepDefsPatterns) {
-                        if (matchedStepDefsPattern.contains(context)) {
-                            isMatched = true;
-                            FieldUtils.writeField(step, "name", context + SECRET_DELIMITER + stepName, true);
-                        }
-                    }
-                    // In case several stepdefs found waht conforms given patters, and there is no stepdef
-                    // with needed context? RuntimeException should be thrown
-                    if (!isMatched) {
-                        throw new RuntimeException(String.format("There isn't step %s in context %s", step.getName(), context));
-                    }
-                }
+                newChildren.add(childRunner);
+
             }
 
-            FieldUtils.writeField(currentStepContainer, "steps", steps, true);
+
+            FieldUtils.writeField(currentStepContainer, "steps", this.processSteps(steps, stepDefinitionsByPatternTranslated), true);
             FieldUtils.writeField(CUCUMBER_FEATURE.get(), "currentStepContainer", currentStepContainer, true);
-            FieldUtils.writeField(child, "CUCUMBER_FEATURE", CUCUMBER_FEATURE.get(), true);
+            FieldUtils.writeField(child, "children", newChildren, true);
+            FieldUtils.writeField(child, "cucumberFeature", CUCUMBER_FEATURE.get(), true);
             FieldUtils.writeField(glue, "stepDefinitionsByPattern", stepDefinitionsByPatternTranslated, true);
             FieldUtils.writeField(runtime, "glue", glue, true);
             FieldUtils.writeField(this, "runtime", runtime, true);
@@ -176,6 +152,56 @@ public class TagCucumber extends Cucumber {
         } catch (IllegalAccessException ex) {
             throw new CucumberException(ex);
         }
+    }
+
+
+    private List<Step> processSteps(List<Step> steps, Map<String, StepDefinition> stepDefinitionsByPatternTranslated) throws IllegalAccessException {
+        // Processing steps
+        List<String> matchedStepDefsPatterns = new ArrayList<>();
+        Step step;
+        for (int i = 0; i < steps.size(); i++) {
+            matchedStepDefsPatterns.clear();
+            step = steps.get(i);
+
+            // Determine how many regexes conforms step's pattern
+            String stepName = step.getName();
+            for (Map.Entry<String, StepDefinition> stringStepDefinitionEntry : stepDefinitionsByPatternTranslated.entrySet()) {
+                if (Pattern.compile(getPattern(stringStepDefinitionEntry.getValue().getPattern())).matcher(stepName).matches()) {
+                    matchedStepDefsPatterns.add(stringStepDefinitionEntry.getKey());
+                }
+            }
+
+            if (matchedStepDefsPatterns.isEmpty()) {
+                continue;
+//                throw new RuntimeException(String.format("There isn't step definition matched to step %s", step.getName()));
+            }
+
+            if (matchedStepDefsPatterns.size() == 1) {
+                // If it contains SECRET_DELIMITER so it TAG's plugin step, else it from end project
+                if (matchedStepDefsPatterns.get(0).contains(SECRET_DELIMITER)) {
+                    FieldUtils.writeField(step, "name", getContext(matchedStepDefsPatterns.get(0)) +
+                            SECRET_DELIMITER + stepName, true);
+                }
+            } else {
+                // Any conflicts should be fixed in TAG plugins, we should avoid it
+                // Getting context from previous step
+                String context = getContext(steps.get(i - 1).getName());
+                boolean isMatched = false;
+                for (String matchedStepDefsPattern : matchedStepDefsPatterns) {
+                    if (matchedStepDefsPattern.contains(context)) {
+                        isMatched = true;
+                        FieldUtils.writeField(step, "name", context + SECRET_DELIMITER + stepName, true);
+                    }
+                }
+                // In case several stepdefs found which conforms given patters, and there is no stepdef
+                // with needed context? RuntimeException should be thrown
+                if (!isMatched) {
+                    throw new RuntimeException(String.format("There isn't step %s in context %s", step.getName(), context));
+                }
+            }
+            steps.set(i, step);
+        }
+        return steps;
     }
 
     private String getContext(String reg) {
