@@ -129,12 +129,10 @@ public class TagCucumber extends Cucumber {
                 if (childRunner instanceof ExecutionUnitRunner) {
                     FieldUtils.writeField(childRunner, "runnerSteps",
                             this.processSteps(((ExecutionUnitRunner) childRunner).getRunnerSteps(), stepDefinitionsByPatternTranslated), true);
-
                     CucumberScenario cucumberScenario = (CucumberScenario) FieldUtils.readField(childRunner, "cucumberScenario", true);
                     FieldUtils.writeField(cucumberScenario, "steps",
                             this.processSteps(cucumberScenario.getSteps(), stepDefinitionsByPatternTranslated), true);
                     FieldUtils.writeField(childRunner, "cucumberScenario", cucumberScenario, true);
-                    newChildren.add(childRunner);
                 } else {
                     Object runners = FieldUtils.readField(childRunner, "runners", true);
                     Object exampleRunners = ((List) runners).get(0);
@@ -156,12 +154,9 @@ public class TagCucumber extends Cucumber {
                         List<ExamplesRunner> unModifiableExamplesRunners = Collections.unmodifiableList(newExampleRunners);
 
                         FieldUtils.writeField(childRunner, "runners", unModifiableExamplesRunners, true);
-                        newChildren.add(childRunner);
                     }
-
-
-//                    throw new RuntimeException("Scenario Outlines is not supported yet");
                 }
+                newChildren.add(childRunner);
             }
 
             FieldUtils.writeField(currentStepContainer, "steps", this.processSteps(steps, stepDefinitionsByPatternTranslated), true);
@@ -197,7 +192,6 @@ public class TagCucumber extends Cucumber {
 
             if (matchedStepDefsPatterns.isEmpty()) {
                 continue;
-//                throw new RuntimeException(String.format("There isn't step definition matched to step %s", step.getName()));
             }
 
             if (matchedStepDefsPatterns.size() == 1) {
@@ -240,7 +234,7 @@ public class TagCucumber extends Cucumber {
     }
 
 
-    private List<StepDefinition>    findUniques(Queue<StepDefinition> q) {
+    private List<StepDefinition> findUniques(Queue<StepDefinition> q) {
         List<StepDefinition> uniques = new ArrayList<>();
         while (q.peek() != null) {
             StepDefinition stepDefinition = q.remove();
