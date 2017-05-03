@@ -7,22 +7,22 @@ import cucumber.runtime.JdkPatternArgumentMatcher;
 import cucumber.runtime.Runtime;
 import cucumber.runtime.RuntimeGlue;
 import cucumber.runtime.StepDefinition;
+import cucumber.runtime.junit.ExamplesRunner;
 import cucumber.runtime.junit.ExecutionUnitRunner;
 import cucumber.runtime.junit.FeatureRunner;
 import cucumber.runtime.model.CucumberFeature;
 import cucumber.runtime.model.CucumberScenario;
 import cucumber.runtime.model.StepContainer;
 import gherkin.formatter.model.Step;
-
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
-
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.model.InitializationError;
@@ -82,7 +82,7 @@ public class TagCucumber extends Cucumber {
             RuntimeGlue glue = (RuntimeGlue) runtime.getGlue();
 
             CUCUMBER_FEATURE.set((CucumberFeature) FieldUtils.readField(child, "cucumberFeature", true));
-            List<ExecutionUnitRunner> children = ((ArrayList<ExecutionUnitRunner>) FieldUtils.readField(child, "children", true));
+            List<Object> children = (List<Object>) FieldUtils.readField(child, "children", true);
             Map<String, StepDefinition> stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue, "stepDefinitionsByPattern", true);
 
             StepContainer currentStepContainer = (StepContainer) FieldUtils.readField(CUCUMBER_FEATURE.get(), "currentStepContainer", true);
@@ -124,21 +124,45 @@ public class TagCucumber extends Cucumber {
                 CURRENT_CLASS.set(new CurrentClass(this.getTestClass()).markTranslated());
             }
 
-            List<ExecutionUnitRunner> newChildren = new ArrayList<>();
-            for (ExecutionUnitRunner childRunner : children) {
-                FieldUtils.writeField(childRunner, "runnerSteps",
-                        this.processSteps(childRunner.getRunnerSteps(), stepDefinitionsByPatternTranslated), true);
+            List<Object> newChildren = new ArrayList<>();
+            for (Object childRunner : children) {
+                if (childRunner instanceof ExecutionUnitRunner) {
+                    FieldUtils.writeField(childRunner, "runnerSteps",
+                            this.processSteps(((ExecutionUnitRunner) childRunner).getRunnerSteps(), stepDefinitionsByPatternTranslated), true);
 
-                CucumberScenario cucumberScenario = (CucumberScenario) FieldUtils.readField(childRunner, "cucumberScenario", true);
-                FieldUtils.writeField(cucumberScenario, "steps",
-                        this.processSteps(cucumberScenario.getSteps(), stepDefinitionsByPatternTranslated), true);
-                FieldUtils.writeField(childRunner, "cucumberScenario", cucumberScenario, true);
+                    CucumberScenario cucumberScenario = (CucumberScenario) FieldUtils.readField(childRunner, "cucumberScenario", true);
+                    FieldUtils.writeField(cucumberScenario, "steps",
+                            this.processSteps(cucumberScenario.getSteps(), stepDefinitionsByPatternTranslated), true);
+                    FieldUtils.writeField(childRunner, "cucumberScenario", cucumberScenario, true);
+                    newChildren.add(childRunner);
+                } else {
+                    Object runners = FieldUtils.readField(childRunner, "runners", true);
+                    Object exampleRunners = ((List) runners).get(0);
+                    List<ExecutionUnitRunner> examples = (List<ExecutionUnitRunner>) FieldUtils.readField(exampleRunners, "runners", true);
+                    List<ExecutionUnitRunner> newExamples = new ArrayList<>();
+                    for (ExecutionUnitRunner exampleRunner : examples) {
+                        FieldUtils.writeField(exampleRunner, "runnerSteps",
+                                this.processSteps(exampleRunner.getRunnerSteps(), stepDefinitionsByPatternTranslated), true);
+
+                        CucumberScenario cucumberScenario = (CucumberScenario) FieldUtils.readField(exampleRunner, "cucumberScenario", true);
+                        FieldUtils.writeField(cucumberScenario, "steps",
+                                this.processSteps(cucumberScenario.getSteps(), stepDefinitionsByPatternTranslated), true);
+                        FieldUtils.writeField(exampleRunner, "cucumberScenario", cucumberScenario, true);
+                        newExamples.add(exampleRunner);
+
+                        FieldUtils.writeField(exampleRunners, "runners", newExamples, true);
+                        List<ExamplesRunner> newExampleRunners = new ArrayList<>();
+                        newExampleRunners.add((ExamplesRunner) exampleRunners);
+                        List<ExamplesRunner> unModifiableExamplesRunners = Collections.unmodifiableList(newExampleRunners);
+
+                        FieldUtils.writeField(childRunner, "runners", unModifiableExamplesRunners, true);
+                        newChildren.add(childRunner);
+                    }
 
 
-                newChildren.add(childRunner);
-
+//                    throw new RuntimeException("Scenario Outlines is not supported yet");
+                }
             }
-
 
             FieldUtils.writeField(currentStepContainer, "steps", this.processSteps(steps, stepDefinitionsByPatternTranslated), true);
             FieldUtils.writeField(CUCUMBER_FEATURE.get(), "currentStepContainer", currentStepContainer, true);
@@ -149,7 +173,7 @@ public class TagCucumber extends Cucumber {
             FieldUtils.writeField(this, "runtime", runtime, true);
 
             super.runChild(child, notifier);
-        } catch (IllegalAccessException ex) {
+        } catch (Exception ex) {
             throw new CucumberException(ex);
         }
     }
@@ -216,7 +240,7 @@ public class TagCucumber extends Cucumber {
     }
 
 
-    private List<StepDefinition> findUniques(Queue<StepDefinition> q) {
+    private List<StepDefinition>    findUniques(Queue<StepDefinition> q) {
         List<StepDefinition> uniques = new ArrayList<>();
         while (q.peek() != null) {
             StepDefinition stepDefinition = q.remove();
