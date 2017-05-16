@@ -10,6 +10,7 @@ import cucumber.runtime.StepDefinition;
 import cucumber.runtime.junit.ExamplesRunner;
 import cucumber.runtime.junit.ExecutionUnitRunner;
 import cucumber.runtime.junit.FeatureRunner;
+import cucumber.runtime.model.CucumberBackground;
 import cucumber.runtime.model.CucumberFeature;
 import cucumber.runtime.model.CucumberScenario;
 import cucumber.runtime.model.StepContainer;
@@ -86,8 +87,7 @@ public class TagCucumber extends Cucumber {
             Map<String, StepDefinition> stepDefinitionsByPattern = (Map<String, StepDefinition>) FieldUtils.readField(glue, "stepDefinitionsByPattern", true);
 
             StepContainer currentStepContainer = (StepContainer) FieldUtils.readField(CUCUMBER_FEATURE.get(), "currentStepContainer", true);
-            List<Step> steps = currentStepContainer.getSteps();
-
+            CucumberBackground cucumberBackground = (CucumberBackground) FieldUtils.readField(CUCUMBER_FEATURE.get(), "cucumberBackground", true);
 
             if (CURRENT_CLASS.get().isTranslated(this.getTestClass())) {
                 stepDefinitionsByPatternTranslated = stepDefinitionsByPattern;
@@ -159,8 +159,12 @@ public class TagCucumber extends Cucumber {
                 newChildren.add(childRunner);
             }
 
-            FieldUtils.writeField(currentStepContainer, "steps", this.processSteps(steps, stepDefinitionsByPatternTranslated), true);
+            FieldUtils.writeField(currentStepContainer, "steps", this.processSteps(currentStepContainer.getSteps(), stepDefinitionsByPatternTranslated), true);
             FieldUtils.writeField(CUCUMBER_FEATURE.get(), "currentStepContainer", currentStepContainer, true);
+            if (cucumberBackground != null) {
+                FieldUtils.writeField(cucumberBackground, "steps", this.processSteps(cucumberBackground.getSteps(), stepDefinitionsByPatternTranslated), true);
+                FieldUtils.writeField(CUCUMBER_FEATURE.get(), "cucumberBackground", cucumberBackground, true);
+            }
             FieldUtils.writeField(child, "children", newChildren, true);
             FieldUtils.writeField(child, "cucumberFeature", CUCUMBER_FEATURE.get(), true);
             FieldUtils.writeField(glue, "stepDefinitionsByPattern", stepDefinitionsByPatternTranslated, true);
@@ -172,7 +176,6 @@ public class TagCucumber extends Cucumber {
             throw new CucumberException(ex);
         }
     }
-
 
     private List<Step> processSteps(List<Step> steps, Map<String, StepDefinition> stepDefinitionsByPatternTranslated) throws IllegalAccessException {
         // Processing steps
@@ -232,7 +235,6 @@ public class TagCucumber extends Cucumber {
         String[] split = reg.split(SECRET_DELIMITER);
         return split.length > 1 ? STRING_START_REGEX + split[1] : reg;
     }
-
 
     private List<StepDefinition> findUniques(Queue<StepDefinition> q) {
         List<StepDefinition> uniques = new ArrayList<>();
