@@ -3,7 +3,7 @@
 
 Custom CucumberJVM JUnit runner for Test Automation Gears based projects.
 
-### Contacts
+### Contact
 If you found error or you have a question? [Check](https://github.com/sbtqa/cucumber-runner/issues), maybe someone asked before, not found? Just [create a new issue](https://github.com/sbtqa/cucumber-runner/issues/new)!
 
 ### License 
