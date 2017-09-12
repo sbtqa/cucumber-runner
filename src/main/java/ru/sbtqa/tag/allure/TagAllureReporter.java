@@ -19,20 +19,6 @@ public class TagAllureReporter extends AllureReporter {
 
     }
 
-//    @Override
-//    Добавил обработку RuntimeException
-//    Но мне кажется это бред, потому что private нельзя оверайдить
-//    private void excuteFailureCallback() {
-//        if (callback != null){
-//            try {
-//                callbackResult = callback.newInstance().call();
-//            } catch (RuntimeException | ReflectiveOperationException ex){
-//                throw new AllureException("Could not initialize callback", ex);
-//            }
-//        }
-//    }
-
-//    Саму ошибку решил тут обрабатывать
     @Override
     public void result(Result result) {
         try {
