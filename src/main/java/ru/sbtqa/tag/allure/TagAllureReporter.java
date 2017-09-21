@@ -19,7 +19,7 @@ public class TagAllureReporter extends AllureReporter {
     }
 
     @Override
-    public Throwable getError(Result result){
-                return result.getError().getCause();
+    public Throwable getError(Result result) {
+        return result.getError().getCause();
     }
 }
