@@ -4,7 +4,6 @@ import gherkin.formatter.model.Result;
 import gherkin.formatter.model.Step;
 import ru.sbtqa.tag.cucumber.TagCucumber;
 import ru.yandex.qatools.allure.cucumberjvm.AllureReporter;
-import ru.yandex.qatools.allure.exceptions.AllureException;
 
 /**
  * Allure reporting plugin for cucumber-jvm
@@ -20,11 +19,7 @@ public class TagAllureReporter extends AllureReporter {
     }
 
     @Override
-    public void result(Result result) {
-        try {
-            super.result(result);
-        } catch (RuntimeException ex){
-            throw new AllureException("Could not initialize callback", ex);
-        }
+    public Throwable getError(Result result){
+                return result.getError().getCause();
     }
 }
