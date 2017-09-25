@@ -1,5 +1,6 @@
 package ru.sbtqa.tag.allure;
 
+import gherkin.formatter.model.Result;
 import gherkin.formatter.model.Step;
 import ru.sbtqa.tag.cucumber.TagCucumber;
 import ru.yandex.qatools.allure.cucumberjvm.AllureReporter;
@@ -15,5 +16,10 @@ public class TagAllureReporter extends AllureReporter {
                 ? step.getKeyword() + step.getName().split(TagCucumber.SECRET_DELIMITER)[1]
                 : step.getKeyword() + step.getName();
 
+    }
+
+    @Override
+    public Throwable getError(Result result) {
+        return result.getError().getCause();
     }
 }
