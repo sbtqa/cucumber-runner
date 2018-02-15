@@ -45,11 +45,6 @@
   </distributionManagement>
   <dependencies>
     <dependency>
-      <groupId>ru.yandex.qatools.allure</groupId>
-      <artifactId>allure-cucumber-jvm-adaptor</artifactId>
-      <version>1.6.4</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
       <version>3.3.2</version>
@@ -110,7 +105,7 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
+<!--      <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-gpg-plugin</artifactId>
         <version>1.5</version>
@@ -123,7 +118,7 @@
             </goals>
           </execution>
         </executions>
-      </plugin>
+      </plugin>-->
     </plugins>
   </build>
 </project>
